@@ -20,3 +20,8 @@ include = ["vectorharbor*"]
 testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
+# FastAPI declares dependencies in parameter defaults by design; style modernization
+# and import ordering are handled separately from correctness checks.
+ignore = ["I001", "B008", "UP017"]
