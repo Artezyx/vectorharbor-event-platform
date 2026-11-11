@@ -4,7 +4,7 @@ import jwt
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
-from vectorharbor.security import Principal, require_principal, require_scope
+from vectorharbor.security import require_principal, require_scope
 
 SECRET = "testing-only-secret-with-at-least-32-bytes"
 def token(**changes):
