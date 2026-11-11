@@ -1,0 +1,4 @@
+event_id,tenant_id,occurred_at,amount,currency,status
+e-001,tenant-a,2026-11-11T10:00:00Z,150.50,MXN,paid
+e-002,tenant-a,2026-11-11T11:00:00Z,30.00,MXN,refunded
+e-003,tenant-b,2026-11-11T11:10:00Z,45.00,USD,paid
