@@ -1,0 +1,24 @@
+name: DataForge ETL tests
+on:
+  push:
+    paths:
+      - 'labs/dataforge-intelligence/**'
+      - '.github/workflows/dataforge-ci.yml'
+  pull_request:
+    paths:
+      - 'labs/dataforge-intelligence/**'
+      - '.github/workflows/dataforge-ci.yml'
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile and test ETL
+        working-directory: labs/dataforge-intelligence
+        run: |
+          PYTHONPATH=. python -m compileall -q dataforge tests
+          PYTHONPATH=. python -m unittest discover -s tests -v
+          PYTHONPATH=. python -m dataforge.pipeline --input examples/events.csv --output /tmp/dataforge-output
