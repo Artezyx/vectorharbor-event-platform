@@ -30,4 +30,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/setup-sam@v2
-      - run: sam validate --template-file template.yaml
+      - run: sam validate --template-file template.yaml --region us-east-1
