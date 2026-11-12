@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SkyRelay AWS Event Processing
+Parameters:
+  CognitoUserPoolArn:
+    Type: String
+    Description: Existing Cognito User Pool ARN
+Resources:
+  EventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+  DeliveryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+  Topic:
+    Type: AWS::SNS::Topic
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+  Queue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 120
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 5
+  SnsPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues: [!Ref Queue]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt Queue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref Topic
+  Subscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref Topic
+      Endpoint: !GetAtt Queue.Arn
+      Protocol: sqs
+  EventApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: v1
+      Auth:
+        DefaultAuthorizer: CognitoAuth
+        Authorizers:
+          CognitoAuth:
+            UserPoolArn: !Ref CognitoUserPoolArn
+  Ingest:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src.ingest.handler
+      Runtime: python3.13
+      Timeout: 15
+      Environment:
+        Variables:
+          EVENTS_TABLE: !Ref EventsTable
+          EVENT_TOPIC: !Ref Topic
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EventsTable
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt Topic.TopicName
+      Events:
+        Create:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EventApi
+            Path: /events
+            Method: post
+  Worker:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src.worker.handler
+      Runtime: python3.13
+      Timeout: 30
+      Environment:
+        Variables:
+          DELIVERY_TABLE: !Ref DeliveryTable
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref DeliveryTable
+      Events:
+        Queue:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt Queue.Arn
+            BatchSize: 10
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+Outputs:
+  ApiUrl:
+    Value: !Sub 'https://${EventApi}.execute-api.${AWS::Region}.amazonaws.com/v1'
